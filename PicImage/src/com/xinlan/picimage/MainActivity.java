@@ -36,7 +36,7 @@ public class MainActivity extends Activity {
 	private final ImageLoader imageLoader = new ImageLoader();
 	private ImageList data;
 	private TextView contentText;
-
+	private StickyGridAdapter mStickyGridAdapter;
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -48,7 +48,9 @@ public class MainActivity extends Activity {
 		contentText = (TextView) findViewById(R.id.content);
 		imageList = selectAllImages();
 		data = new ImageList(imageList);
-		gridView.setAdapter(new StickyGridAdapter());
+		mStickyGridAdapter = new StickyGridAdapter();
+		gridView.setAdapter(mStickyGridAdapter);
+		gridView.setOnScrollListener(mStickyGridAdapter);
 		updateContentText();
 	}
 
@@ -62,6 +64,7 @@ public class MainActivity extends Activity {
 		HeadCheckClick mHeadCheckClick = new HeadCheckClick();
 		private HashMap<CheckBox, Image> imageCheckBoxMap = new HashMap<CheckBox, Image>();// 记录所有创建的图片CheckBox
 		private HashMap<ImageView, String> headCheckMap = new HashMap<ImageView, String>();// head记录表
+		private HashMap<ImageView, String> imageViewLoadUrlMap = new HashMap<ImageView, String>();//
 
 		@Override
 		public int getCount() {
@@ -90,12 +93,25 @@ public class MainActivity extends Activity {
 						.findViewById(R.id.check_box);
 				convertView.setTag(viewHolder);
 
+				Image imageData = data.getList().get(position);
+				viewHolder.image.setImageDrawable(imgDefault);
+				imageViewLoadUrlMap.put(viewHolder.image, imageData.getPath());
+				imageLoader.DisplayImage(imageData.getPath(), viewHolder.image);
+
+				imageCheckBoxMap.put(viewHolder.checkBox, imageData);// 更新
+				viewHolder.checkBox.setChecked(imageData.isSelected);
+				viewHolder.checkBox
+						.setOnCheckedChangeListener(mImageCheckBoxListener);
+				return convertView;
+
 			} else {
 				viewHolder = (ViewHolder) convertView.getTag();
 			}
 
 			Image imageData = data.getList().get(position);
-			imageLoader.DisplayImage(imageData.getPath(), viewHolder.image);
+			viewHolder.image.setImageDrawable(imgDefault);
+			imageViewLoadUrlMap.put(viewHolder.image, imageData.getPath());
+			// imageLoader.DisplayImage(imageData.getPath(), viewHolder.image);
 
 			imageCheckBoxMap.put(viewHolder.checkBox, imageData);// 更新
 			viewHolder.checkBox.setChecked(imageData.isSelected);
@@ -164,12 +180,10 @@ public class MainActivity extends Activity {
 					imgView.setImageResource(R.drawable.icon_xuanzhong);
 				}
 
-				// imageCheckBoxMap.keySet()
 				for (CheckBox checkBox : imageCheckBoxMap.keySet()) {// 更新子CheckBox控件
 					Image item = imageCheckBoxMap.get(checkBox);
 					checkBox.setChecked(item.isSelected);
 				}// end for each
-					// System.out.println("===>"+curtime+"    "+data.getHeadRecord().get(curtime));
 			}
 		}// end inner class
 
@@ -242,7 +256,22 @@ public class MainActivity extends Activity {
 
 		@Override
 		public void onScrollStateChanged(AbsListView view, int scrollState) {
+			switch (scrollState) {
+			case OnScrollListener.SCROLL_STATE_IDLE: // 停止滑动
+				// mBusy = false;
+				loadImages();
+				break;
+			}// end switch
+		}
 
+		/***
+		 * 载入待加载的图片
+		 */
+		private void loadImages() {
+			for (ImageView imageView : imageViewLoadUrlMap.keySet()) {
+				String picUrl = imageViewLoadUrlMap.get(imageView);
+				imageLoader.DisplayImage(picUrl, imageView);
+			}// end for each
 		}
 	}// end inner class
 

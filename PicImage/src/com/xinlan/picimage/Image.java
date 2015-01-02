@@ -1,10 +1,12 @@
 package com.xinlan.picimage;
 
 public class Image {
-	private String name;//Ãû³Æ
-	private String path;//Â·¾¶
-	private Long taken;//ÅÄÉãÊ±¼ä
-	private Integer size;//Í¼Æ¬´óĞ¡
+	private String name;//å›¾ç‰‡å
+	private String path;//å›¾ç‰‡è·¯å¾„
+	private Long taken;//å›¾ç‰‡å”¯ä¸€æ ‡ç¤º
+	private Integer size;//å›¾ç‰‡å°ºå¯¸
+	private String timeStr;
+	public boolean isSelected = false;
 	
 	public Image(String name, String path, Long taken, Integer size) {
 		this.name = name;
@@ -35,5 +37,11 @@ public class Image {
 	}
 	public void setSize(Integer size) {
 		this.size = size;
+	}
+	public String getTimeStr() {
+		return timeStr;
+	}
+	public void setTimeStr(String timeStr) {
+		this.timeStr = timeStr;
 	}
 }//end class

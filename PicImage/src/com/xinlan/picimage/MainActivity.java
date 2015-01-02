@@ -1,21 +1,31 @@
 package com.xinlan.picimage;
 
 import gridview.StickyGridHeadersGridView;
-import gridview.StickyGridHeadersGridView.OnHeaderClickListener;
-import gridview.StickyGridHeadersSimpleArrayAdapter;
+import gridview.StickyGridHeadersSimpleAdapter;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 import lib.picturechooser.util.ImageLoader;
 import android.app.Activity;
 import android.content.Context;
 import android.database.Cursor;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.widget.AdapterView;
+import android.view.View.OnClickListener;
+import android.view.ViewGroup;
+import android.view.ViewGroup.LayoutParams;
+import android.widget.AbsListView;
+import android.widget.AbsListView.OnScrollListener;
+import android.widget.BaseAdapter;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
+import android.widget.CompoundButton.OnCheckedChangeListener;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 public class MainActivity extends Activity {
@@ -25,10 +35,7 @@ public class MainActivity extends Activity {
 	private LayoutInflater mInflater;
 	private final ImageLoader imageLoader = new ImageLoader();
 	private ImageList data;
-	private StickyGridHeadersSimpleArrayAdapter adapter;
 	private TextView contentText;
-
-	public boolean isScroll = false;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -41,129 +48,220 @@ public class MainActivity extends Activity {
 		contentText = (TextView) findViewById(R.id.content);
 		imageList = selectAllImages();
 		data = new ImageList(imageList);
-		adapter = new StickyGridHeadersSimpleArrayAdapter(this, data,
-				R.layout.head_view, R.layout.imageitem);
-		gridView.setOnHeaderClickListener(adapter);
-		gridView.setAdapter(adapter);
-
-		// gridView.setOnScrollListener(new OnScrollListener() {
-		//
-		// @Override
-		// public void onScrollStateChanged(AbsListView view, int scrollState) {
-		// switch(scrollState){
-		// case AbsListView.OnScrollListener.SCROLL_STATE_TOUCH_SCROLL:
-		// //System.out.println("SCROLL_STATE_TOUCH_SCROLL");
-		// isScroll = true;
-		// break;
-		// case AbsListView.OnScrollListener.SCROLL_STATE_FLING:
-		// //System.out.println("SCROLL_STATE_FLING");
-		// isScroll = true;
-		// break;
-		// case AbsListView.OnScrollListener.SCROLL_STATE_IDLE:
-		// //System.out.println("SCROLL_STATE_IDLE");
-		// isScroll = false;
-		// break;
-		// }//end swtich
-		// }
-		//
-		// @Override
-		// public void onScroll(AbsListView view, int firstVisibleItem,
-		// int visibleItemCount, int totalItemCount) {
-		//
-		// }
-		// });
-
+		gridView.setAdapter(new StickyGridAdapter());
 		updateContentText();
 	}
+
+	private final class StickyGridAdapter extends BaseAdapter implements
+			StickyGridHeadersSimpleAdapter, OnScrollListener {
+		ViewGroup.LayoutParams textLayoutParams = new ViewGroup.LayoutParams(
+				LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+		Drawable imgDefault = getResources()
+				.getDrawable(R.drawable.ic_launcher);// 载入图片占位符
+		ImageCheckBoxListener mImageCheckBoxListener = new ImageCheckBoxListener();
+		HeadCheckClick mHeadCheckClick = new HeadCheckClick();
+		private HashMap<CheckBox, Image> imageCheckBoxMap = new HashMap<CheckBox, Image>();// 记录所有创建的图片CheckBox
+		private HashMap<ImageView, String> headCheckMap = new HashMap<ImageView, String>();// head记录表
+
+		@Override
+		public int getCount() {
+			return data.getList().size();
+		}
+
+		@Override
+		public Object getItem(int position) {
+			return data.getList().get(position);
+		}
+
+		@Override
+		public long getItemId(int position) {
+			return position;
+		}
+
+		@Override
+		public View getView(int position, View convertView, ViewGroup parent) {
+			ViewHolder viewHolder;
+			if (convertView == null) {
+				viewHolder = new ViewHolder();
+				convertView = mInflater.inflate(R.layout.imageitem, null);
+				viewHolder.image = (ImageView) convertView
+						.findViewById(R.id.icon);
+				viewHolder.checkBox = (CheckBox) convertView
+						.findViewById(R.id.check_box);
+				convertView.setTag(viewHolder);
+
+			} else {
+				viewHolder = (ViewHolder) convertView.getTag();
+			}
+
+			Image imageData = data.getList().get(position);
+			imageLoader.DisplayImage(imageData.getPath(), viewHolder.image);
+
+			imageCheckBoxMap.put(viewHolder.checkBox, imageData);// 更新
+			viewHolder.checkBox.setChecked(imageData.isSelected);
+			viewHolder.checkBox
+					.setOnCheckedChangeListener(mImageCheckBoxListener);
+
+			return convertView;
+		}
+
+		@Override
+		public long getHeaderId(int position) {
+			return data.getList().get(position).getTimeStr().hashCode();
+		}
+
+		@Override
+		public View getHeaderView(int position, View convertView,
+				ViewGroup parent) {
+			HeadViewHolder viewHolder;
+			if (convertView == null) {
+				viewHolder = new HeadViewHolder();
+				convertView = mInflater.inflate(R.layout.head_view, null);
+				viewHolder.timeText = (TextView) convertView
+						.findViewById(R.id.text);
+				viewHolder.selectedImage = (ImageView) convertView
+						.findViewById(R.id.select_image);
+				convertView.setTag(viewHolder);
+			} else {
+				viewHolder = (HeadViewHolder) convertView.getTag();
+			}
+
+			headCheckMap.put(viewHolder.selectedImage,
+					data.getList().get(position).getTimeStr());
+
+			viewHolder.timeText.setText(data.getList().get(position)
+					.getTimeStr());
+			viewHolder.selectedImage.setTag(data.getList().get(position)
+					.getTimeStr());
+			viewHolder.selectedImage.setOnClickListener(mHeadCheckClick);
+
+			if (data.getHeadRecord().get(
+					data.getList().get(position).getTimeStr())) {
+				viewHolder.selectedImage
+						.setImageResource(R.drawable.icon_xuanzhong);
+			} else {
+				viewHolder.selectedImage
+						.setImageResource(R.drawable.icon_weixuanzhong);
+			}
+
+			return convertView;
+		}
+
+		private final class HeadCheckClick implements OnClickListener {
+			@Override
+			public void onClick(View v) {
+				ImageView imgView = (ImageView) v;
+				String curtime = (String) v.getTag();
+				boolean selectedValue = !data.getHeadRecord().get(curtime);
+				data.getHeadRecord().put(curtime, selectedValue);
+				List<Image> subImageList = data.getMap().get(curtime);
+				for (int i = 0, len = subImageList.size(); i < len; i++) {
+					subImageList.get(i).isSelected = selectedValue;
+				}// end for i
+				if (selectedValue) {
+					imgView.setImageResource(R.drawable.icon_xuanzhong);
+				} else {
+					imgView.setImageResource(R.drawable.icon_xuanzhong);
+				}
+
+				// imageCheckBoxMap.keySet()
+				for (CheckBox checkBox : imageCheckBoxMap.keySet()) {// 更新子CheckBox控件
+					Image item = imageCheckBoxMap.get(checkBox);
+					checkBox.setChecked(item.isSelected);
+				}// end for each
+					// System.out.println("===>"+curtime+"    "+data.getHeadRecord().get(curtime));
+			}
+		}// end inner class
+
+		/**
+		 * 
+		 * @author panyi
+		 * 
+		 */
+		private final class ImageCheckBoxListener implements
+				OnCheckedChangeListener {
+			private List<ImageView> tempImageList = new ArrayList<ImageView>();
+
+			@Override
+			public void onCheckedChanged(CompoundButton buttonView,
+					boolean isChecked) {
+				CheckBox checkbox = (CheckBox) buttonView;
+				imageCheckBoxMap.get(checkbox).isSelected = isChecked;// 更新选中
+
+				updateContentText();
+
+				// 更新头部栏选中状态
+				boolean headCheckedIsSelected = false;
+				String timeTitle = imageCheckBoxMap.get(checkbox).getTimeStr();// 标题头
+				List<Image> subImageList = data.getMap().get(timeTitle);
+				int selectedNum = 0;
+				int sublen = subImageList.size();
+				for (int i = 0; i < sublen; i++) {
+					if (subImageList.get(i).isSelected) {
+						selectedNum++;
+					}
+				}// end for i
+				if (selectedNum >= sublen) {
+					headCheckedIsSelected = true;
+				} else {
+					headCheckedIsSelected = false;
+				}// end if
+
+				tempImageList.clear();
+				for (ImageView img : headCheckMap.keySet()) {
+					String value = headCheckMap.get(img);
+					if (timeTitle.equals(value)) {
+						tempImageList.add(img);
+					}
+				}// end for each
+
+				// TextView s =
+				// (TextView)gridView.getStickiedHeader().findViewById(R.id.text);
+				// System.out.println("ssss--->"+s.getText());
+
+				for (int i = 0, len = tempImageList.size(); i < len; i++) {
+					if (headCheckedIsSelected) {// 选中
+						tempImageList.get(i).setImageResource(
+								R.drawable.icon_xuanzhong);
+						data.getHeadRecord().put(timeTitle, true);
+					} else {// 未选中
+						tempImageList.get(i).setImageResource(
+								R.drawable.icon_weixuanzhong);
+						data.getHeadRecord().put(timeTitle, false);
+					}
+				}// end for i
+				gridView.invalidate();// 更新GridView界面
+			}
+		}// end inner class
+
+		@Override
+		public void onScroll(AbsListView view, int firstVisibleItem,
+				int visibleItemCount, int totalItemCount) {
+
+		}
+
+		@Override
+		public void onScrollStateChanged(AbsListView view, int scrollState) {
+
+		}
+	}// end inner class
 
 	public void updateContentText() {
 		contentText.setText(getSelectNum());
 	}
 
 	public String getSelectNum() {
-		StringBuffer sb = new StringBuffer("ѡ��");
+		StringBuffer sb = new StringBuffer("选中");
 		int total = 0;
-		List<TimeImage> imageList = data.getList();
+		List<Image> imageList = data.getList();
 		for (int i = 0, len = imageList.size(); i < len; i++) {
 			if (imageList.get(i).isSelected)
 				total++;
 		}// end for i
 		sb.append(total + "");
-		return sb.append("��ͼƬ").toString();
+		return sb.append("张图片").toString();
 	}
 
-	// private final class GridAdapter extends BaseAdapter implements
-	// StickyGridHeadersSimpleAdapter {
-	//
-	// @Override
-	// public int getCount() {
-	// return data.getList().size();
-	// }
-	//
-	// @Override
-	// public Object getItem(int position) {
-	// return position;
-	// }
-	//
-	// @Override
-	// public long getItemId(int position) {
-	// return 0;
-	// }
-	//
-	// @Override
-	// public View getView(int position, View convertView, ViewGroup parent) {
-	//
-	// ItemViewHolder viewHolder;
-	// if (convertView == null) {
-	// convertView = mInflater.inflate(R.layout.imageitem, null);
-	// viewHolder = new ItemViewHolder();
-	// viewHolder.img = (ImageView) convertView
-	// .findViewById(R.id.icon);
-	// convertView.setTag(convertView);
-	// } else {
-	// viewHolder = (ItemViewHolder) convertView.getTag();
-	// }
-	// imageLoader.DisplayImage(data.getList().get(position).getPath(),
-	// viewHolder.img);
-	//
-	// return convertView;
-	// }
-	//
-	// @Override
-	// public long getHeaderId(int position) {
-	// return (long) data.getList().get(position).getDateText().hashCode();
-	// }
-	//
-	// @Override
-	// public View getHeaderView(int position, View convertView,
-	// ViewGroup parent) {
-	// HeadViewHolder viewHolder;
-	// if (convertView == null) {
-	// convertView = mInflater.inflate(R.layout.head_view, null);
-	// viewHolder = new HeadViewHolder();
-	// viewHolder.titleText = (TextView) convertView
-	// .findViewById(R.id.text);
-	// convertView.setTag(convertView);
-	// } else {
-	// viewHolder = (HeadViewHolder) convertView.getTag();
-	// }
-	// viewHolder.titleText.setText(data.getList().get(position)
-	// .getDateText());
-	// return convertView;
-	// }
-	//
-	// protected class ItemViewHolder {
-	// ImageView img;
-	// }
-	//
-	// protected class HeadViewHolder {
-	// TextView titleText;
-	// }
-	// }// end inner class
-
-	/**
-	 * ѡ�������ͼƬ
-	 */
 	private List<Image> selectAllImages() {
 		long t1 = System.currentTimeMillis();
 		Cursor cur = mContext.getContentResolver().query(
@@ -187,10 +285,19 @@ public class MainActivity extends Activity {
 			}
 			cur.close();
 		}
-		System.out.println("����ͼƬ--->" + images.size());
 		long t2 = System.currentTimeMillis();
-		System.out.println("��ѯ����ͼƬ��ʱ--->" + (t2 - t1));
+		System.out.println("处理图片耗时---->" + (t2 - t1));
 
 		return images;
+	}
+
+	static class ViewHolder {
+		ImageView image;
+		CheckBox checkBox;
+	}
+
+	static class HeadViewHolder {
+		TextView timeText;
+		ImageView selectedImage;
 	}
 }// end class
